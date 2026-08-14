@@ -28,32 +28,32 @@ spec:
           args:
             - |
               set -e
-              echo "=== Inizio copia modello ==="
+              echo "=== Starting model copy ==="
               mkdir -p /mnt/models
               
               if [ -f /app/model/1/saved_model.pb ]; then
-                echo "Trovato modello in /app/model/1/, copio nel PVC..."
+                echo "Model found in /app/model/1/, copying to PVC..."
                 cp -r /app/model/1 /mnt/models/
               elif [ -f /app/model/saved_model.pb ]; then
-                echo "Trovato modello in /app/model/, copio nel PVC..."
+                echo "Model found in /app/model/, copying to PVC..."
                 mkdir -p /mnt/models/1
                 cp -r /app/model/. /mnt/models/1/
               else
-                echo "ERRORE: Nessun modello valido trovato!"
+                echo "ERROR: No valid model found!"
                 ls -laR /app/ || true
                 exit 1
               fi
               
-              echo "=== Verifica contenuto PVC ==="
+              echo "=== Checking PVC content ==="
               ls -laR /mnt/models/
               
               if [ ! -f /mnt/models/1/saved_model.pb ]; then
-                echo "ERRORE CRITICO: saved_model.pb non trovato!"
+                echo "CRITICAL ERROR: saved_model.pb not found!"
                 exit 1
               fi
               
               chmod -R 755 /mnt/models/
-              echo "=== Copia completata con successo ==="
+              echo "=== Copy completed successfully ==="
           volumeMounts:
             - name: model-storage
               mountPath: /mnt/models
@@ -92,32 +92,32 @@ spec:
           args:
             - |
               set -e
-              echo "=== Inizio copia modello (test) ==="
+              echo "=== Starting model copy (test) ==="
               mkdir -p /mnt/models
               
               if [ -f /app/model/1/saved_model.pb ]; then
-                echo "Trovato modello in /app/model/1/, copio nel PVC..."
+                echo "Model found in /app/model/1/, copying to PVC..."
                 cp -r /app/model/1 /mnt/models/
               elif [ -f /app/model/saved_model.pb ]; then
-                echo "Trovato modello in /app/model/, copio nel PVC..."
+                echo "Model found in /app/model/, copying to PVC..."
                 mkdir -p /mnt/models/1
                 cp -r /app/model/. /mnt/models/1/
               else
-                echo "ERRORE: Nessun modello valido trovato!"
+                echo "ERROR: No valid model found!"
                 ls -laR /app/ || true
                 exit 1
               fi
               
-              echo "=== Verifica contenuto PVC ==="
+              echo "=== Checking PVC content ==="
               ls -laR /mnt/models/
               
               if [ ! -f /mnt/models/1/saved_model.pb ]; then
-                echo "ERRORE CRITICO: saved_model.pb non trovato!"
+                echo "CRITICAL ERROR: saved_model.pb not found!"
                 exit 1
               fi
               
               chmod -R 755 /mnt/models/
-              echo "=== Copia completata con successo ==="
+              echo "=== Copy completed successfully ==="
           volumeMounts:
             - name: model-storage
               mountPath: /mnt/models
