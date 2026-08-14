@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: simple-cnn-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: simple-cnn-copy-job
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: model-writer
+          image: tomasconti02/resnet_model_test:v2
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              echo "=== Inizio copia modello ==="
+              mkdir -p /mnt/models
+              
+              if [ -f /app/model/1/saved_model.pb ]; then
+                echo "Trovato modello in /app/model/1/, copio nel PVC..."
+                cp -r /app/model/1 /mnt/models/
+              elif [ -f /app/model/saved_model.pb ]; then
+                echo "Trovato modello in /app/model/, copio nel PVC..."
+                mkdir -p /mnt/models/1
+                cp -r /app/model/. /mnt/models/1/
+              else
+                echo "ERRORE: Nessun modello valido trovato!"
+                ls -laR /app/ || true
+                exit 1
+              fi
+              
+              echo "=== Verifica contenuto PVC ==="
+              ls -laR /mnt/models/
+              
+              if [ ! -f /mnt/models/1/saved_model.pb ]; then
+                echo "ERRORE CRITICO: saved_model.pb non trovato!"
+                exit 1
+              fi
+              
+              chmod -R 755 /mnt/models/
+              echo "=== Copia completata con successo ==="
+          volumeMounts:
+            - name: model-storage
+              mountPath: /mnt/models
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: simple-cnn-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: simple-cnn-test-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: simple-cnn-test-copy-job
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: model-writer
+          image: tomasconti02/resnet_model_test:v2
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              echo "=== Inizio copia modello (test) ==="
+              mkdir -p /mnt/models
+              
+              if [ -f /app/model/1/saved_model.pb ]; then
+                echo "Trovato modello in /app/model/1/, copio nel PVC..."
+                cp -r /app/model/1 /mnt/models/
+              elif [ -f /app/model/saved_model.pb ]; then
+                echo "Trovato modello in /app/model/, copio nel PVC..."
+                mkdir -p /mnt/models/1
+                cp -r /app/model/. /mnt/models/1/
+              else
+                echo "ERRORE: Nessun modello valido trovato!"
+                ls -laR /app/ || true
+                exit 1
+              fi
+              
+              echo "=== Verifica contenuto PVC ==="
+              ls -laR /mnt/models/
+              
+              if [ ! -f /mnt/models/1/saved_model.pb ]; then
+                echo "ERRORE CRITICO: saved_model.pb non trovato!"
+                exit 1
+              fi
+              
+              chmod -R 755 /mnt/models/
+              echo "=== Copia completata con successo ==="
+          volumeMounts:
+            - name: model-storage
+              mountPath: /mnt/models
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: simple-cnn-test-pvc
