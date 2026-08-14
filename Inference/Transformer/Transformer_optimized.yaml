@@ -1,0 +1,233 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tf-batching-config
+  namespace: default
+data:
+  batching_params.pbtxt: |
+    max_batch_size { value: 4 }
+    batch_timeout_micros { value: 1000 }
+    max_enqueued_batches { value: 200 }
+    num_batch_threads { value: 4 }
+
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: simple-cnn
+  namespace: default
+spec:
+  predictor:
+    minReplicas: 1
+    timeout: 60
+    nodeSelector:
+      kubernetes.io/hostname: nvidia-ca7
+    annotations:
+      autoscaling.knative.dev/min-scale: "1"
+    volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: simple-cnn-pvc
+      - name: batching-config-volume
+        configMap:
+          name: tf-batching-config
+    containers:
+      - name: kserve-container
+        image: tensorflow/serving:latest-gpu
+        args:
+          - --model_name=simple-cnn
+          - --port=9000
+          - --rest_api_port=8082
+          - --model_base_path=/mnt/models
+          - --rest_api_timeout_in_ms=60000
+          - --per_process_gpu_memory_fraction=0.45
+          - --enable_batching=true
+          - --batching_parameters_file=/mnt/config/batching_params.pbtxt
+        env:
+          - name: TF_FORCE_GPU_ALLOW_GROWTH
+            value: "true"
+          - name: NVIDIA_VISIBLE_DEVICES
+            value: "all"
+          - name: NVIDIA_DRIVER_CAPABILITIES
+            value: "compute,utility"
+          - name: LD_LIBRARY_PATH
+            value: "/usr/local/cuda/lib64:/usr/local/cuda/lib"
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+            nvidia.com/gpu: "1"
+        volumeMounts:
+          - name: model-storage
+            mountPath: /mnt/models
+          - name: batching-config-volume
+            mountPath: /mnt/config
+
+      - name: transformer-container
+        image: tomasconti02/rpc_v2:v35
+        command:
+          - python
+          - -m
+          - transformer
+        args:
+          - --model_names
+          - simple-cnn
+          - --namespace
+          - default
+          - --predictor_host
+          - "127.0.0.1:9000"
+          - --broker
+          - "http://kafka-broker-ingress.knative-eventing.svc.cluster.local/default/kafka-broker"
+          - --broker_host
+          - "kafka-broker-ingress.knative-eventing.svc.cluster.local"
+          - --ce_type
+          - "org.kubeflow.serving.inference.request"
+        env:
+          - name: WORKERS
+            value: "8"
+          - name: NUM_WORKERS
+            value: "8"
+          - name: TRACE
+            value: "false"
+          - name: UVICORN_ACCESS_LOG
+            value: "0"
+          - name: TF_CPP_MIN_LOG_LEVEL
+            value: "3"
+          - name: PYTHONWARNINGS
+            value: "ignore"
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        ports:
+          - name: http1
+            containerPort: 8080
+            protocol: TCP
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: simple-cnn-test
+  namespace: default
+spec:
+  predictor:
+    minReplicas: 1
+    timeout: 60
+    nodeSelector:
+      kubernetes.io/hostname: nvidia-ca7
+    annotations:
+      autoscaling.knative.dev/min-scale: "1"
+    volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: simple-cnn-test-pvc
+      - name: batching-config-volume
+        configMap:
+          name: tf-batching-config
+    containers:
+      - name: kserve-container
+        image: tensorflow/serving:latest-gpu
+        args:
+          - --model_name=simple-cnn-test
+          - --port=9000
+          - --rest_api_port=8082
+          - --model_base_path=/mnt/models
+          - --rest_api_timeout_in_ms=60000
+          - --per_process_gpu_memory_fraction=0.45
+          - --enable_batching=true
+          - --batching_parameters_file=/mnt/config/batching_params.pbtxt
+        env:
+          - name: TF_FORCE_GPU_ALLOW_GROWTH
+            value: "true"
+          - name: NVIDIA_VISIBLE_DEVICES
+            value: "all"
+          - name: NVIDIA_DRIVER_CAPABILITIES
+            value: "compute,utility"
+          - name: LD_LIBRARY_PATH
+            value: "/usr/local/cuda/lib64:/usr/local/cuda/lib"
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+            nvidia.com/gpu: "1"
+        volumeMounts:
+          - name: model-storage
+            mountPath: /mnt/models
+          - name: batching-config-volume
+            mountPath: /mnt/config
+
+      - name: transformer-container
+        image: tomasconti02/rpc_v2:v35
+        command:
+          - python
+          - -m
+          - transformer
+        args:
+          - --model_names
+          - simple-cnn-test
+          - --namespace
+          - default
+          - --predictor_host
+          - "127.0.0.1:9000"
+          - --broker
+          - "http://kafka-broker-ingress.knative-eventing.svc.cluster.local/default/kafka-broker"
+          - --broker_host
+          - "kafka-broker-ingress.knative-eventing.svc.cluster.local"
+          - --ce_type
+          - "org.kubeflow.serving.inference.request"
+        env:
+          - name: WORKERS
+            value: "8"
+          - name: NUM_WORKERS
+            value: "8"
+          - name: TRACE
+            value: "false"
+          - name: UVICORN_ACCESS_LOG
+            value: "0"
+          - name: TF_CPP_MIN_LOG_LEVEL
+            value: "3"
+          - name: PYTHONWARNINGS
+            value: "ignore"
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        ports:
+          - name: http1
+            containerPort: 8080
+            protocol: TCP
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10

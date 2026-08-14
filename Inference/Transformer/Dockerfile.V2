@@ -1,0 +1,24 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg libsm6 libxext6 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir \
+    kserve==0.16.0 \
+    opencv-python-headless \
+    numpy \
+    aiohttp \
+    grpcio \
+    tensorflow-serving-api
+
+COPY V2.py /app/transformer.py
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+EXPOSE 8080 8081
+
+ENTRYPOINT ["python", "-m", "transformer"]
