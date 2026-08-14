@@ -1,0 +1,59 @@
+apiVersion: kafka.strimzi.io/v1 #kafka cluster that create a node pool using Raft and no more ZooKeeper
+kind: KafkaNodePool #first resource of the cluster, define the cluster setting as roles, raft metadata storing ...
+metadata:
+  name: dual-role
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  replicas: 3 # numbers replica nodes
+  roles: #each node act as 
+    - controller # manage the cluster raft voting protocol 
+    - broker # handling data producer and consumer communication 
+  storage: # storaga because we don't want data lost
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim # kafka is very fast in the disck operations because execute log appending
+        size: 10Gi # hard disk 
+        kraftMetadata: shared #cluster kraft metadata configuration are stored with the kafka message topic 
+  resources:
+    requests:
+      memory: 2Gi # in memory ram 
+      cpu: 1000m
+    limits:
+      memory: 4Gi #max amount of ram 
+      cpu: 2000m
+---
+
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka #second resource of the cluster
+metadata:
+  name: my-cluster
+  namespace: kafka
+  annotations:
+    strimzi.io/node-pools: enabled #enable the pool configuration 
+spec:
+  kafka:
+    version: 4.2.0
+    metadataVersion: 4.2-IV1
+    replicas: 3
+    listeners:
+      - name: plain
+        port: 9092 #for internal cluster network between the nodes 
+        type: internal
+        tls: false
+      - name: tls
+        port: 9093 #Encrypted communication from outside the cluster
+        type: internal
+        tls: true
+    config: # how Kafka handles data redundancy, replication, and fault tolerance across the 3 nodes 
+      offsets.topic.replication.factor: 3 # offset is used to remember and track consumer reading state (we don't want lose it)
+      transaction.state.log.replication.factor: 3 # log that track the Exactly-Once Semantics of each transaction
+      transaction.state.log.min.isr: 2 # applay the same consept of "min.insync.replicas" to the transaction log
+      default.replication.factor: 3 #replication factor of each topic partitions 
+      min.insync.replicas: 2 # becasue raft and 3 as replica factor, only 2 write log commint are enough to ack the client (the majority)
+      auto.create.topics.enable: true #if an application ask for a topic kafka create if not present yet
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}

@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config-simple-cnn
+  namespace: default
+data:
+  redis.conf: |
+    # Enable Append-Only File (AOF) for maximum reliability
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+
+    # RDB Snapshots as secondary backup
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    # Directory where PVC is mounted
+    dir /data
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ood-detector-simple-cnn
+  namespace: default
+spec:
+  template:
+    metadata:
+      annotations:
+        scale-to-zero-pod-retention-period: "60s"
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/max-scale: "1"
+    spec:
+      containerConcurrency: 100
+      containers:
+        - name: ood-detector
+          image: docker.io/tomasconti02/ood-detector:v21
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: fallback-storage
+              mountPath: /data/queue
+              readOnly: false
+          env:
+            - name: OOD_INITIAL_THRESHOLD
+              value: "0.2"
+            - name: OOD_SAFE_THRESHOLD
+              value: "0.2"
+            - name: OOD_WINDOW_SIZE
+              value: "100"
+            - name: OOD_BATCH_SIZE
+              value: "20"
+            - name: OOD_MIN_SAMPLES
+              value: "20"
+            - name: OOD_SMOOTHING
+              value: "0.95"
+            - name: OOD_PERCENTILE
+              value: "95"
+            - name: OOD_MAX_PERCENTILE
+              value: "99"
+            - name: OOD_MAX_CONSECUTIVE_DROPS
+              value: "3"
+            - name: OOD_MAX_CONSECUTIVE_UPS
+              value: "3"
+            - name: OOD_MEDIAN_WINDOW
+              value: "5"
+            - name: OOD_SMOOTH_SAFETY_TH
+              value: "true"
+            - name: CENTROIDS_PATH
+              value: "/app/centroids.npy"
+            - name: INV_COV_MATRIX_PATH
+              value: "/app/inv_cov_matrix.npy"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: REDIS_HOST
+              value: "localhost"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_IMAGE_TTL
+              value: "3600"
+            - name: REDIS_OOD_EXTENDED_TTL
+              value: "86400"
+            - name: OOD_FORWARD_ENDPOINT
+              value: "http://cloud_ood_storing_service/process_ood_batch"
+            - name: OOD_FORWARD_BATCH_SIZE
+              value: "5"
+
+        - name: redis
+          image: redis:7-alpine
+          args: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data
+              readOnly: false
+            - name: redis-config
+              mountPath: /usr/local/etc/redis
+              readOnly: true
+
+      volumes:
+        - name: redis-storage
+          persistentVolumeClaim:
+            claimName: redis-pvc-simple-cnn
+        - name: fallback-storage
+          persistentVolumeClaim:
+            claimName: ood-queue-pvc-simple-cnn
+        - name: redis-config
+          configMap:
+            name: redis-config-simple-cnn
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc-simple-cnn
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ood-queue-pvc-simple-cnn
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: trigger-simple-cnn
+  namespace: default
+spec:
+  broker: kafka-broker
+  filter:
+    attributes:
+      type: org.kubeflow.serving.inference.request
+      source: simple-cnn
+  subscriber:
+    ref:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      name: ood-detector-simple-cnn
+
