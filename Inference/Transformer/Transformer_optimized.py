@@ -84,8 +84,13 @@ class ImageTransformer(Model):
                 return
             payload = {"image_key": image_key, "instances": embedding.tolist()}
             headers = {
-                "Host": self.broker_host, "Ce-Id": uuid.uuid4().hex, "Ce-Specversion": "1.0",
-                "Ce-Type": self.ce_type, "Ce-Source": self.name, "Content-Type": "application/json", "X-Image-Key": image_key
+                "Host": self.broker_host,
+                "Ce-Id": uuid.uuid4().hex,
+                "Ce-Specversion": "1.0",
+                "Ce-Type": self.ce_type,
+                "Ce-Source": self.name,
+                "Content-Type": "application/json",
+                "X-Image-Key": image_key
             }
             session = await self._get_session()
             async with session.post(self.broker, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
@@ -97,8 +102,12 @@ class ImageTransformer(Model):
     async def _store_image(self, image: bytes, filename: str, content_type: str, image_key: str):
         try:
             headers = {
-                "Host": self.detector_host, "Content-Type": content_type, "X-Filename": filename,
-                "X-TTL": "600", "X-Metadata": self.name, "X-Image-Key": image_key
+                "Host": self.detector_host,
+                "Content-Type": content_type,
+                "X-Filename": filename,
+                "X-TTL": "600",
+                "X-Metadata": self.name,
+                "X-Image-Key": image_key
             }
             url = f"{self.istio_gateway}/store_image"
             session = await self._get_session()
@@ -109,14 +118,14 @@ class ImageTransformer(Model):
             logger.error("Detector exception [%s]: %s", image_key, exc)
 
     def _extract_image_bytes(self, input_tensor: InferInput) -> bytes:
-        # Estrazione diretta e pulita ottimizzata per UINT8 (Binary Tensor Data Extension)
         return np.asarray(input_tensor.data, dtype=np.uint8).tobytes()
 
     async def preprocess(self, payload: InferRequest, headers: Optional[Dict[str, str]] = None) -> InferRequest:
         headers = headers or {}
         image_key = uuid.uuid4().hex
-        filename = headers.get("x-filename", "unknown.jpg")
-        content_type = headers.get("content-type", "image/jpeg")
+
+        filename = headers.get("x-filename", "unknown.png")
+        content_type = headers.get("content-type", "image/png")
 
         input_tensor = payload.get_input_by_name("input")
         if input_tensor is None or input_tensor.data is None:
@@ -136,15 +145,28 @@ class ImageTransformer(Model):
         image_float = np.empty((1, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS), dtype=np.float32)
         np.multiply(image, NORM_FACTOR, out=image_float[0])
 
+        # Convertiamo l'image_key in array di byte per farlo viaggiare come input nativo V2
+        key_bytes = np.frombuffer(image_key.encode("utf-8"), dtype=np.uint8)
+
         return InferRequest(
             model_name=self.name,
-            infer_inputs=[InferInput(name="input", shape=list(image_float.shape), datatype="FP32", data=image_float)],
+            infer_inputs=[
+                InferInput(name="input", shape=list(image_float.shape), datatype="FP32", data=image_float),
+                InferInput(name="image_key", shape=[len(key_bytes)], datatype="BYTES", data=key_bytes)
+            ],
             request_id=image_key,
         )
 
     async def predict(self, payload: InferRequest, headers=None, response_headers=None) -> InferResponse:
         input_tensor = payload.get_input_by_name("input")
         array = np.asarray(input_tensor.data, dtype=np.float32).reshape(input_tensor.shape)
+
+        # Recuperiamo l'image_key passato come input strutturato dalla preprocess
+        key_tensor = payload.get_input_by_name("image_key")
+        if key_tensor is None or key_tensor.data is None:
+            raise ValueError("Input tensor 'image_key' not found in predict payload")
+        
+        image_key = np.asarray(key_tensor.data, dtype=np.uint8).tobytes().decode("utf-8")
 
         request = predict_pb2.PredictRequest()
         request.model_spec.name = self.name
@@ -162,33 +184,45 @@ class ImageTransformer(Model):
         embedding = tensor_proto_to_numpy(tf_response.outputs["embedding"], np.float32)
         predicted_class = tensor_proto_to_numpy(tf_response.outputs["predicted_class"], np.int32)
 
+        key_bytes_out = np.frombuffer(image_key.encode("utf-8"), dtype=np.uint8)
+
         outputs = [
             InferOutput(name="probabilities", shape=list(probabilities.shape), datatype="FP32", data=probabilities),
             InferOutput(name="embedding", shape=list(embedding.shape), datatype="FP32", data=embedding),
             InferOutput(name="predicted_class", shape=list(predicted_class.shape), datatype="INT32", data=predicted_class),
+            InferOutput(name="image_key", shape=[len(key_bytes_out)], datatype="BYTES", data=key_bytes_out)
         ]
 
-        return InferResponse(response_id=getattr(payload, "request_id", ""), model_name=self.name, infer_outputs=outputs)
+        return InferResponse(
+            response_id=image_key,
+            model_name=self.name,
+            infer_outputs=outputs
+        )
 
-    async def postprocess(self, response: InferResponse, headers=None, response_headers=None) -> InferResponse:
-        headers = headers or {}
-        response_id = getattr(response, "response_id", None) or uuid.uuid4().hex
-        image_key = headers.get("x-image-key") or response_id
+    async def postprocess(self, response: InferResponse, headers=None) -> InferResponse:
+        # Recuperiamo l'image_key direttamente dagli output restituiti da predict()
+        key_output = response.get_output_by_name("image_key")
+        if key_output is None or key_output.as_numpy() is None:
+            raise ValueError("Output 'image_key' not found in response")
+
+        image_key = np.asarray(key_output.as_numpy(), dtype=np.uint8).tobytes().decode("utf-8")
 
         predicted = response.get_output_by_name("predicted_class")
         if predicted is None:
             raise ValueError("Output 'predicted_class' not found")
 
         predicted_class = int(predicted.as_numpy().flatten()[0])
-
         embedding = response.get_output_by_name("embedding")
+
         if embedding is not None:
             asyncio.create_task(self._send_to_kafka(embedding.as_numpy(), image_key))
 
         return InferResponse(
             response_id=image_key,
             model_name=self.name,
-            infer_outputs=[InferOutput(name="predicted_class", shape=[1], datatype="INT32", data=[predicted_class])],
+            infer_outputs=[
+                InferOutput(name="predicted_class", shape=[1], datatype="INT32", data=[predicted_class])
+            ],
         )
 
 if __name__ == "__main__":
@@ -209,9 +243,12 @@ if __name__ == "__main__":
     workers = int(os.getenv("WORKERS", "8"))
     transformers = [
         ImageTransformer(
-            name=m, predictor_host=args.predictor_host, broker=args.broker,
-            broker_host=args.broker_host, ce_type=args.ce_type, istio_gateway=args.istio_gateway
+            name=m,
+            predictor_host=args.predictor_host,
+            broker=args.broker,
+            broker_host=args.broker_host,
+            ce_type=args.ce_type,
+            istio_gateway=args.istio_gateway
         ) for m in models
     ]
-
     ModelServer(http_port=8080, grpc_port=8081, workers=workers, enable_grpc=True).start(transformers)
