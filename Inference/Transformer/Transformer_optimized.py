@@ -116,22 +116,38 @@ class ImageTransformer(Model):
                     logger.error("Detector error HTTP %s [%s]", response.status, image_key)
         except Exception as exc:
             logger.error("Detector exception [%s]: %s", image_key, exc)
+    """
+    POST /v2/models/simple-cnn/infer HTTP/1.1
+    Host: simple-cnn-predictor.default.example.com
+    Content-Type: application/octet-stream
+    Inference-Header-Content-Length: <json_byte_length>
+    Content-Length: <total_length_of_json_plus_binary>
 
-    def _extract_image_bytes(self, input_tensor: InferInput) -> bytes:
-        return np.asarray(input_tensor.data, dtype=np.uint8).tobytes()
-
+    {
+    "inputs": [
+    {
+      "name": "input",
+      "shape": [X],
+      "datatype": "UINT8",
+      "parameters": {
+        "binary_data_size": X
+      }
+    }
+    ]
+    }
+    < X raw bytes of the image (binary)>    
+    """
     async def preprocess(self, payload: InferRequest, headers: Optional[Dict[str, str]] = None) -> InferRequest:
         headers = headers or {}
         image_key = uuid.uuid4().hex
-
         filename = headers.get("x-filename", "unknown.png")
         content_type = headers.get("content-type", "image/png")
-
+        
         input_tensor = payload.get_input_by_name("input")
         if input_tensor is None or input_tensor.data is None:
             raise ValueError("V2 input 'input' missing or empty")
 
-        image_bytes = self._extract_image_bytes(input_tensor)
+        image_bytes = np.asarray(input_tensor.data, dtype=np.uint8).tobytes()
         asyncio.create_task(self._store_image(image_bytes, filename, content_type, image_key))
 
         image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
@@ -145,14 +161,13 @@ class ImageTransformer(Model):
         image_float = np.empty((1, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS), dtype=np.float32)
         np.multiply(image, NORM_FACTOR, out=image_float[0])
 
-        # Convertiamo l'image_key in array di byte per farlo viaggiare come input nativo V2
         key_bytes = np.frombuffer(image_key.encode("utf-8"), dtype=np.uint8)
 
         return InferRequest(
             model_name=self.name,
             infer_inputs=[
                 InferInput(name="input", shape=list(image_float.shape), datatype="FP32", data=image_float),
-                InferInput(name="image_key", shape=[len(key_bytes)], datatype="BYTES", data=key_bytes)
+                InferInput(name="image_key", shape=list(key_bytes.shape), datatype="BYTES", data=key_bytes)
             ],
             request_id=image_key,
         )
@@ -161,12 +176,12 @@ class ImageTransformer(Model):
         input_tensor = payload.get_input_by_name("input")
         array = np.asarray(input_tensor.data, dtype=np.float32).reshape(input_tensor.shape)
 
-        # Recuperiamo l'image_key passato come input strutturato dalla preprocess
         key_tensor = payload.get_input_by_name("image_key")
         if key_tensor is None or key_tensor.data is None:
             raise ValueError("Input tensor 'image_key' not found in predict payload")
         
-        image_key = np.asarray(key_tensor.data, dtype=np.uint8).tobytes().decode("utf-8")
+        key_bytes_out = np.asarray(key_tensor.data, dtype=np.uint8)
+        image_key = key_bytes_out.tobytes().decode("utf-8")
 
         request = predict_pb2.PredictRequest()
         request.model_spec.name = self.name
@@ -184,23 +199,16 @@ class ImageTransformer(Model):
         embedding = tensor_proto_to_numpy(tf_response.outputs["embedding"], np.float32)
         predicted_class = tensor_proto_to_numpy(tf_response.outputs["predicted_class"], np.int32)
 
-        key_bytes_out = np.frombuffer(image_key.encode("utf-8"), dtype=np.uint8)
-
         outputs = [
             InferOutput(name="probabilities", shape=list(probabilities.shape), datatype="FP32", data=probabilities),
             InferOutput(name="embedding", shape=list(embedding.shape), datatype="FP32", data=embedding),
             InferOutput(name="predicted_class", shape=list(predicted_class.shape), datatype="INT32", data=predicted_class),
-            InferOutput(name="image_key", shape=[len(key_bytes_out)], datatype="BYTES", data=key_bytes_out)
+            InferOutput(name="image_key", shape=list(key_tensor.shape), datatype="BYTES", data=key_bytes_out)
         ]
 
-        return InferResponse(
-            response_id=image_key,
-            model_name=self.name,
-            infer_outputs=outputs
-        )
+        return InferResponse(response_id=image_key, model_name=self.name, infer_outputs=outputs)
 
     async def postprocess(self, response: InferResponse, headers=None) -> InferResponse:
-        # Recuperiamo l'image_key direttamente dagli output restituiti da predict()
         key_output = response.get_output_by_name("image_key")
         if key_output is None or key_output.as_numpy() is None:
             raise ValueError("Output 'image_key' not found in response")
@@ -222,7 +230,7 @@ class ImageTransformer(Model):
             model_name=self.name,
             infer_outputs=[
                 InferOutput(name="predicted_class", shape=[1], datatype="INT32", data=[predicted_class])
-            ],
+            ]
         )
 
 if __name__ == "__main__":
@@ -240,7 +248,7 @@ if __name__ == "__main__":
     if not models:
         raise ValueError("No models specified")
 
-    workers = int(os.getenv("WORKERS", "8"))
+    workers = int(os.getenv("WORKERS", "4"))
     transformers = [
         ImageTransformer(
             name=m,
