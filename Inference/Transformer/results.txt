@@ -1,3 +1,33 @@
+     execution: local
+        script: time.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 30 max VUs, 10m30s max duration (incl. graceful stop):
+              * default: Up to 30 looping VUs for 10m0s over 5 stages (gracefulRampDown: 30s, gracefulStop: 30s)
+
+     ✓ status is 200
+     ✓ has predicted_class output
+
+     checks.........................: 100.00% ✓ 88014    ✗ 0    
+     data_received..................: 16 MB   27 kB/s
+     data_sent......................: 46 MB   77 kB/s
+     http_req_blocked...............: avg=28.84µs   min=1.74µs    med=9µs       max=45.29ms    p(90)=11.94µs   p(95)=15.45µs   p(99)=73.73µs  
+     http_req_connecting............: avg=18.05µs   min=0s        med=0s        max=45.2ms     p(90)=0s        p(95)=0s        p(99)=0s       
+     http_req_duration..............: avg=62.09ms   min=30.22ms   med=73.9ms    max=316.18ms   p(90)=77.55ms   p(95)=78.96ms   p(99)=84.5ms   
+       { expected_response:true }...: avg=62.09ms   min=30.22ms   med=73.9ms    max=316.18ms   p(90)=77.55ms   p(95)=78.96ms   p(99)=84.5ms   
+   ✓ http_req_failed................: 0.00%   ✓ 0        ✗ 44007
+     http_req_receiving.............: avg=113.34µs  min=15.31µs   med=102.19µs  max=4.66ms     p(90)=180.31µs  p(95)=200.91µs  p(99)=284.6µs  
+     http_req_sending...............: avg=42.43µs   min=7.06µs    med=38.52µs   max=1.48ms     p(90)=55.26µs   p(95)=86.57µs   p(99)=124.33µs 
+     http_req_tls_handshaking.......: avg=0s        min=0s        med=0s        max=0s         p(90)=0s        p(95)=0s        p(99)=0s       
+     http_req_waiting...............: avg=61.94ms   min=30.17ms   med=73.75ms   max=316ms      p(90)=77.38ms   p(95)=78.81ms   p(99)=84.32ms  
+     http_reqs......................: 44007   73.32921/s
+   ✓ inference_processing_time......: avg=62.097963 min=30.222261 med=73.907827 max=316.183212 p(90)=77.551767 p(95)=78.969046 p(99)=84.509247
+     iteration_duration.............: avg=263.2ms   min=230.92ms  med=274.98ms  max=517.41ms   p(90)=278.67ms  p(95)=280.09ms  p(99)=285.78ms 
+     iterations.....................: 44007   73.32921/s
+     vus............................: 1       min=1      max=30 
+
+running (10m00.1s), 00/30 VUs, 44007 complete and 0 interrupted iterations
+
     execution: local
         script: time.js
         output: -
