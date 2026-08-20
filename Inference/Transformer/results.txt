@@ -1,3 +1,87 @@
+    execution: local
+        script: time.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 30 max VUs, 10m30s max duration (incl. graceful stop):
+              * default: Up to 30 looping VUs for 10m0s over 5 stages (gracefulRampDown: 30s, gracefulStop: 30s)
+
+     ✓ status is 200
+     ✓ has predicted_class output
+
+     checks.........................: 100.00% ✓ 87920     ✗ 0    
+     data_received..................: 16 MB   27 kB/s
+     data_sent......................: 46 MB   77 kB/s
+     http_req_blocked...............: avg=25.39µs   min=1.9µs     med=8.83µs    max=24.8ms     p(90)=11.85µs   p(95)=14.33µs   p(99)=66.45µs  
+     http_req_connecting............: avg=15.07µs   min=0s        med=0s        max=24.67ms    p(90)=0s        p(95)=0s        p(99)=0s       
+     http_req_duration..............: avg=62.37ms   min=29.71ms   med=74.19ms   max=540.54ms   p(90)=78.01ms   p(95)=79.84ms   p(99)=88.58ms  
+       { expected_response:true }...: avg=62.37ms   min=29.71ms   med=74.19ms   max=540.54ms   p(90)=78.01ms   p(95)=79.84ms   p(99)=88.58ms  
+   ✓ http_req_failed................: 0.00%   ✓ 0         ✗ 43960
+     http_req_receiving.............: avg=107.18µs  min=12.97µs   med=98.24µs   max=1.96ms     p(90)=169.95µs  p(95)=191.45µs  p(99)=259.69µs 
+     http_req_sending...............: avg=41.4µs    min=8.04µs    med=37.96µs   max=1.64ms     p(90)=54.03µs   p(95)=80.29µs   p(99)=121.79µs 
+     http_req_tls_handshaking.......: avg=0s        min=0s        med=0s        max=0s         p(90)=0s        p(95)=0s        p(99)=0s       
+     http_req_waiting...............: avg=62.22ms   min=29.6ms    med=74.04ms   max=540.32ms   p(90)=77.86ms   p(95)=79.69ms   p(99)=88.44ms  
+     http_reqs......................: 43960   73.255774/s
+   ✓ inference_processing_time......: avg=62.377663 min=29.716637 med=74.197503 max=540.542634 p(90)=78.014762 p(95)=79.841974 p(99)=88.582558
+     iteration_duration.............: avg=263.46ms  min=230.42ms  med=275.24ms  max=741.95ms   p(90)=279.13ms  p(95)=280.93ms  p(99)=290.18ms 
+     iterations.....................: 43960   73.255774/s
+     vus............................: 1       min=1       max=30 
+
+running (10m00.1s), 00/30 VUs, 43960 complete and 0 interrupted iterations
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ✓ status is 200
+     ✓ has predicted_class output
+
+     checks.........................: 100.00% ✓ 91038     ✗ 0    
+     data_received..................: 17 MB   28 kB/s
+     data_sent......................: 55 MB   92 kB/s
+     http_req_blocked...............: avg=17.68µs   min=1.41µs    med=8.69µs    max=26.8ms      p(90)=11.06µs   p(95)=12.11µs   p(99)=24.5µs   
+     http_req_connecting............: avg=8.82µs    min=0s        med=0s        max=26.7ms      p(90)=0s        p(95)=0s        p(99)=0s       
+     http_req_duration..............: avg=53.37ms   min=17.49ms   med=62.9ms    max=1.03s       p(90)=67.7ms    p(95)=70.55ms   p(99)=98.77ms  
+       { expected_response:true }...: avg=53.37ms   min=17.49ms   med=62.9ms    max=1.03s       p(90)=67.7ms    p(95)=70.55ms   p(99)=98.77ms  
+   ✓ http_req_failed................: 0.00%   ✓ 0         ✗ 45519
+     http_req_receiving.............: avg=90.46µs   min=11.05µs   med=89.4µs    max=1.03ms      p(90)=121.81µs  p(95)=132.98µs  p(99)=183.07µs 
+     http_req_sending...............: avg=36.67µs   min=5.32µs    med=37.09µs   max=2.74ms      p(90)=47.71µs   p(95)=52.66µs   p(99)=73.57µs  
+     http_req_tls_handshaking.......: avg=0s        min=0s        med=0s        max=0s          p(90)=0s        p(95)=0s        p(99)=0s       
+     http_req_waiting...............: avg=53.25ms   min=17.37ms   med=62.78ms   max=1.03s       p(90)=67.57ms   p(95)=70.43ms   p(99)=98.65ms  
+     http_reqs......................: 45519   75.841505/s
+   ✓ inference_processing_time......: avg=53.378985 min=17.499729 med=62.907667 max=1039.480129 p(90)=67.705714 p(95)=70.557874 p(99)=98.778375
+     iteration_duration.............: avg=254.44ms  min=218.44ms  med=263.95ms  max=1.24s       p(90)=268.8ms   p(95)=271.67ms  p(99)=299.9ms  
+     iterations.....................: 45519   75.841505/s
+     vus............................: 1       min=1       max=30 
+
+running (10m00.2s), 00/30 VUs, 45519 complete and 0 interrupted iterations
+
+     execution: local
+        script: time.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 30 max VUs, 10m30s max duration (incl. graceful stop):
+              * default: Up to 30 looping VUs for 10m0s over 5 stages (gracefulRampDown: 30s, gracefulStop: 30s)
+
+     ✓ status is 200
+     ✓ has predicted_class output
+
+     checks.........................: 100.00% ✓ 91800     ✗ 0    
+     data_received..................: 17 MB   29 kB/s
+     data_sent......................: 48 MB   80 kB/s
+     http_req_blocked...............: avg=18.96µs   min=1.48µs    med=8.59µs    max=123.28ms   p(90)=10.89µs   p(95)=12.01µs   p(99)=23.95µs  
+     http_req_connecting............: avg=10.03µs   min=0s        med=0s        max=123.16ms   p(90)=0s        p(95)=0s        p(99)=0s       
+     http_req_duration..............: avg=51.27ms   min=17.19ms   med=62.53ms   max=507.97ms   p(90)=66.57ms   p(95)=68.02ms   p(99)=72.93ms  
+       { expected_response:true }...: avg=51.27ms   min=17.19ms   med=62.53ms   max=507.97ms   p(90)=66.57ms   p(95)=68.02ms   p(99)=72.93ms  
+   ✓ http_req_failed................: 0.00%   ✓ 0         ✗ 45900
+     http_req_receiving.............: avg=92.54µs   min=11.88µs   med=91.28µs   max=3ms        p(90)=123.07µs  p(95)=135.03µs  p(99)=189.93µs 
+     http_req_sending...............: avg=37.68µs   min=5µs       med=37.17µs   max=14.58ms    p(90)=47.76µs   p(95)=53.39µs   p(99)=82.13µs  
+     http_req_tls_handshaking.......: avg=0s        min=0s        med=0s        max=0s         p(90)=0s        p(95)=0s        p(99)=0s       
+     http_req_waiting...............: avg=51.14ms   min=17.08ms   med=62.4ms    max=507.87ms   p(90)=66.43ms   p(95)=67.89ms   p(99)=72.8ms   
+     http_reqs......................: 45900   76.477695/s
+   ✓ inference_processing_time......: avg=51.278583 min=17.198695 med=62.534384 max=507.979736 p(90)=66.574399 p(95)=68.027112 p(99)=72.937164
+     iteration_duration.............: avg=252.33ms  min=218.27ms  med=263.52ms  max=709.4ms    p(90)=267.68ms  p(95)=269.16ms  p(99)=274.26ms 
+     iterations.....................: 45900   76.477695/s
+     vus............................: 1       min=1       max=30 
+
+running (10m00.2s), 00/30 VUs, 45900 complete and 0 interrupted iterations
+
      execution: local
         script: time.js
         output: -
