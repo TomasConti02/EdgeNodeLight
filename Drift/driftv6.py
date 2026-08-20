@@ -266,49 +266,44 @@ async def wait_for_redis_image(img_key: str, meta_key: str, retries: int = RETRY
         await asyncio.sleep(RETRY_DELAY)
     return None, None
 
-
 async def worker_loop(worker_id: int):
     log.info(f"[Worker-{worker_id}] Background processing loop started.")
     try:
         while True:
-            item = await queue.get() #stat the loop after the embedding is arrived
+            item = await queue.get()
             eid = item.get("event_id", "unknown")
             image_key = item.get("image_key", "unknown-key")
-            insts = item["instances"]
+            inst = item.get("embedding") 
             
             try:
-                for inst in insts: #for each embedding batch, in this implementation  there is allways one
-                    if inst is None:
-                        continue
-                    
-                    dist, ood, th = await asyncio.to_thread(detector.process, inst) #inst 512 embedding
+                if inst is not None:
+                    dist, ood, th = await asyncio.to_thread(detector.process, inst)
 
                     if image_key != "unknown-key" and redis_client is not None:
-                        img_redis_key = f"image:{image_key}" # recreate the image link
-                        meta_redis_key = f"{img_redis_key}:meta" # recreate the image link
+                        img_redis_key = f"image:{image_key}"
+                        meta_redis_key = f"{img_redis_key}:meta"
 
-                        if ood: #a ood has been detected 
-                            log.warning(f"[OOD Detector] OOD DETECTED! Key: {image_key} | Distance: {dist:.4f}")
+                        if ood:
+                            log.warning(f"[OOD Detector] OOD DETECTED! Key: {image_key}")
                             img_bytes, meta_dict = await wait_for_redis_image(img_redis_key, meta_redis_key)
                             
                             if img_bytes is None or not meta_dict:
                                 log.warning(f"[Worker-{worker_id}] Image not yet ready in Redis for OOD key {image_key}. Skipping persistence.")
                                 continue
 
-                            ood_record = json.dumps({ "img_redis_key": img_redis_key, "meta_redis_key": meta_redis_key,})
+                            ood_record = json.dumps({ "img_redis_key": img_redis_key, "meta_redis_key": meta_redis_key })
 
-                            async with redis_client.pipeline(transaction=True) as pipe: #redis transaction 
-                                pipe.expire(img_redis_key, REDIS_OOD_EXTENDED_TTL) 
+                            async with redis_client.pipeline(transaction=True) as pipe:
+                                pipe.expire(img_redis_key, REDIS_OOD_EXTENDED_TTL)
                                 pipe.expire(meta_redis_key, REDIS_OOD_EXTENDED_TTL)
-                                pipe.rpush("queue:ood_to_flush", ood_record) # ood image blob and metadata queue 
+                                pipe.rpush("queue:ood_to_flush", ood_record)
                                 pipe.incr("metrics:redis_success_ttl")
                                 await pipe.execute()
 
-                            queue_len = await redis_client.llen("queue:ood_to_flush") # how many ood into the queue?
-
+                            queue_len = await redis_client.llen("queue:ood_to_flush")
                             if queue_len >= OOD_FORWARD_BATCH_SIZE:
-                                await forward_ood_batch() #flush 
-                        else:  # it is not a ood, delete as soon as possibile
+                                await forward_ood_batch()
+                        else:
                             try:
                                 async with redis_client.pipeline(transaction=True) as pipe:
                                     pipe.delete(img_redis_key)
@@ -323,7 +318,6 @@ async def worker_loop(worker_id: int):
                 log.info(f"[Worker-{worker_id}] Completed processing event ID: {eid} | Remaining Queue: {queue.qsize()}")
     except asyncio.CancelledError:
         log.info(f"[Worker-{worker_id}] Worker loop cancelled.")
-
 
 async def increment_redis_error():
     if redis_client:
@@ -372,28 +366,29 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan) #start the application
 
-#payload = {"image_key": image_key, "instances": embedding.tolist()}
+#payload = {"image_key": image_key, "embedding": embedding.tolist()}
 #headers = {"Host": self.broker_host, "Ce-Id": uuid.uuid4().hex, "Ce-Specversion": "1.0", "Ce-Type": self.ce_type,"Ce-Source": self.name,"Content-Type": "application/json","X-Image-Key": image_key }
 @app.post("/") # receive the http cloud events from the knative event driven support
 async def receive(req: Request):
     try:
-        ev = await req.json()
+        ev = await req.json() #req payload into json
     except Exception:
         raise HTTPException(400, "Invalid JSON")
 
     eid = req.headers.get("Ce-Id", "unknown")
     image_key = req.headers.get("X-Image-Key") or ev.get("image_key", "unknown-key") #image key link
-    insts = ev.get("instances") #embedding [1,512] but could be also [N, 512]
+    
+    emb = ev.get("embedding")
 
-    if insts is None:
-        raise HTTPException(400, "Missing 'instances'")
+    if emb is None:
+        raise HTTPException(400, "Missing 'embedding'")
     try:
-        queue.put_nowait({"event_id": eid, "image_key": image_key, "instances": insts}) #asynch queue
+        
+        queue.put_nowait({"event_id": eid, "image_key": image_key, "embedding": emb})
     except asyncio.QueueFull:
         raise HTTPException(503, "Overloaded")
 
     return Response(status_code=204) #aynch response
-
 
 @app.get("/health")
 async def health():
