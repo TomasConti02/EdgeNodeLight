@@ -1,7 +1,12 @@
+import os
+
+# Impostare le variabili d'ambiente per gRPC PRIMA di importare grpc o kserve
+os.environ["GRPC_ENABLE_FORK_SUPPORT"] = "1"
+os.environ["GRPC_POLL_STRATEGY"] = "epoll1"
+
 import argparse
 import asyncio
 import logging
-import os
 import uuid
 from typing import Dict, Optional
 
@@ -10,30 +15,38 @@ import cv2
 import grpc
 import numpy as np
 
-from tensorflow.core.framework import tensor_pb2
-from tensorflow.core.framework import types_pb2
+from tensorflow.core.framework import tensor_pb2, types_pb2
 from tensorflow_serving.apis import predict_pb2, prediction_service_pb2_grpc
 from kserve import Model, ModelServer, InferRequest, InferResponse, InferInput, InferOutput
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 IMAGE_HEIGHT = 256
 IMAGE_WIDTH = 256
 IMAGE_CHANNELS = 3
-PRE_ALLOCATED_SHAPE = (1, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS)
 
-def numpy_to_tensor_proto(array: np.ndarray, base_tensor: tensor_pb2.TensorProto) -> tensor_pb2.TensorProto:
+CLIENT_TIMEOUT = aiohttp.ClientTimeout(total=10)
+GRPC_OPTIONS = [
+    ("grpc.max_receive_message_length", 100 * 1024 * 1024),
+    ("grpc.max_send_message_length", 100 * 1024 * 1024),
+]
+
+def numpy_to_tensor_proto(array: np.ndarray) -> tensor_pb2.TensorProto:
+    """Crea un TensorProto in modo sicuro ed efficiente."""
     tensor = tensor_pb2.TensorProto()
-    tensor.CopyFrom(base_tensor)
+    tensor.dtype = types_pb2.DT_FLOAT
+    for d in array.shape:
+        tensor.tensor_shape.dim.add(size=int(d))
     tensor.tensor_content = array.tobytes()
     return tensor
 
 def tensor_proto_to_numpy(tensor: tensor_pb2.TensorProto, target_dtype: np.dtype) -> np.ndarray:
+    """Deserializza un TensorProto in un array NumPy."""
     shape = [int(dim.size) for dim in tensor.tensor_shape.dim]
     
     if tensor.tensor_content:
-        array = np.frombuffer(tensor.tensor_content, dtype=target_dtype)
+        return np.frombuffer(tensor.tensor_content, dtype=target_dtype).reshape(shape)
     elif target_dtype in (np.float32, np.float64):
         array = np.fromiter(tensor.float_val, dtype=target_dtype, count=len(tensor.float_val))
     elif target_dtype in (np.int32, np.int64):
@@ -54,26 +67,29 @@ class ImageTransformer(Model):
         self.ce_type = ce_type
         self.istio_gateway = istio_gateway
         self.detector_host = f"ood-detector-{name}.default.example.com"
+        self.detector_url = f"{self.istio_gateway}/store_image"
 
         self._session: Optional[aiohttp.ClientSession] = None
         self._grpc_channel: Optional[grpc.aio.Channel] = None
         self._grpc_stub: Optional[prediction_service_pb2_grpc.PredictionServiceStub] = None
 
-        self._base_input_tensor = tensor_pb2.TensorProto()
-        self._base_input_tensor.dtype = types_pb2.DT_FLOAT
-        for dim in PRE_ALLOCATED_SHAPE:
-            self._base_input_tensor.tensor_shape.dim.add(size=dim)
-
-        self._output_buffer = np.empty(PRE_ALLOCATED_SHAPE, dtype=np.float32)
-        logger.info("[%s] ImageTransformer inizializzato con successo.", self.name)
+        self._base_kafka_headers = {
+            "Host": self.broker_host,
+            "Ce-Specversion": "1.0",
+            "Ce-Type": self.ce_type,
+            "Ce-Source": self.name,
+            "Content-Type": "application/json",
+        }
+        
+        self._base_detector_headers = {
+            "Host": self.detector_host,
+            "X-TTL": "600",
+            "X-Metadata": self.name,
+        }
 
     async def _get_tf_stub(self) -> prediction_service_pb2_grpc.PredictionServiceStub:
         if self._grpc_stub is None:
-            options = [
-                ("grpc.max_receive_message_length", 100 * 1024 * 1024),
-                ("grpc.max_send_message_length", 100 * 1024 * 1024)
-            ]
-            self._grpc_channel = grpc.aio.insecure_channel(self.predictor_host, options=options)
+            self._grpc_channel = grpc.aio.insecure_channel(self.predictor_host, options=GRPC_OPTIONS)
             self._grpc_stub = prediction_service_pb2_grpc.PredictionServiceStub(self._grpc_channel)
         return self._grpc_stub
 
@@ -88,35 +104,27 @@ class ImageTransformer(Model):
             if embedding.size == 0:
                 return
             payload = {"image_key": image_key, "embedding": embedding.tolist()}
-            headers = {
-                "Host": self.broker_host,
-                "Ce-Id": image_key,
-                "Ce-Specversion": "1.0",
-                "Ce-Type": self.ce_type,
-                "Ce-Source": self.name,
-                "Content-Type": "application/json",
-                "X-Image-Key": image_key
-            }
+            
+            headers = self._base_kafka_headers.copy()
+            headers["Ce-Id"] = image_key
+            headers["X-Image-Key"] = image_key
+
             session = await self._get_session()
-            async with session.post(self.broker, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.post(self.broker, json=payload, headers=headers, timeout=CLIENT_TIMEOUT) as response:
                 if response.status >= 300:
                     logger.error("[%s] Errore Kafka HTTP %s [%s]", self.name, response.status, image_key)
         except Exception as exc:
             logger.error("[%s] Eccezione Kafka [%s]: %s", self.name, image_key, exc)
 
-    async def _store_image(self, image: bytes, filename: str, content_type: str, image_key: str):
+    async def _store_image(self, image_bytes: bytes, filename: str, content_type: str, image_key: str):
         try:
-            headers = {
-                "Host": self.detector_host,
-                "Content-Type": content_type,
-                "X-Filename": filename,
-                "X-TTL": "600",
-                "X-Metadata": self.name,
-                "X-Image-Key": image_key
-            }
-            url = f"{self.istio_gateway}/store_image"
+            headers = self._base_detector_headers.copy()
+            headers["Content-Type"] = content_type
+            headers["X-Filename"] = filename
+            headers["X-Image-Key"] = image_key
+
             session = await self._get_session()
-            async with session.post(url, headers=headers, data=image, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.post(self.detector_url, headers=headers, data=image_bytes, timeout=CLIENT_TIMEOUT) as response:
                 if response.status >= 300:
                     logger.error("[%s] Errore Detector HTTP %s [%s]", self.name, response.status, image_key)
         except Exception as exc:
@@ -133,61 +141,48 @@ class ImageTransformer(Model):
             logger.error("[%s] Input V2 'input' mancante", self.name)
             raise ValueError("Input V2 'input' mancante")
 
-        # Estrazione diretta: dai log sappiamo che as_numpy() restituisce np.ndarray(uint8)
-        img_bytes = input_tensor.as_numpy().tobytes()
-
-        # Decodifica buffer con OpenCV
-        nparr = np.frombuffer(img_bytes, dtype=np.uint8)
+        raw_arr = input_tensor.as_numpy()
+        nparr = np.asarray(raw_arr, dtype=np.uint8).ravel()
+        
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if image is None:
             logger.error("[%s] Impossibile decodificare l'immagine via cv2 per key: %s", self.name, image_key)
             raise ValueError("Immagine non decodificabile tramite cv2.imdecode")
 
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        cv2.cvtColor(image, cv2.COLOR_BGR2RGB, dst=image)
 
         if image.shape[0] != IMAGE_HEIGHT or image.shape[1] != IMAGE_WIDTH:
             image = cv2.resize(image, (IMAGE_WIDTH, IMAGE_HEIGHT), interpolation=cv2.INTER_LINEAR)
-        
-        np.copyto(self._output_buffer[0], image.astype(np.float32, copy=False))
 
-        try:
-            raw_bytes_out = self._output_buffer.astype(np.uint8).tobytes()
-            asyncio.create_task(self._store_image(raw_bytes_out, filename, image_type, image_key))
-        except Exception as exc:
-            logger.warning("[%s] Errore nella schedulazione di _store_image [%s]: %s", self.name, image_key, exc)
+        asyncio.create_task(self._store_image(image.tobytes(), filename, image_type, image_key))
+
+        tensor_data = np.expand_dims(image.astype(np.float32, copy=False), axis=0)
 
         return InferRequest(
             model_name=self.name,
             request_id=image_key,
-            infer_inputs=[InferInput(name="input", shape=list(self._output_buffer.shape), datatype="FP32", data=self._output_buffer)]
+            infer_inputs=[InferInput(name="input", shape=list(tensor_data.shape), datatype="FP32", data=tensor_data)]
         )
 
     async def predict(self, payload: InferRequest, headers=None, response_headers=None) -> InferResponse:
         image_key = getattr(payload, "id", "N/A")
         input_tensor = payload.get_input_by_name("input")
-        array = np.asarray(input_tensor.data, dtype=np.float32).reshape(input_tensor.shape)
+        array = input_tensor.as_numpy().astype(np.float32, copy=False).reshape(input_tensor.shape)
 
         request = predict_pb2.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = "serving_default"
-        request.inputs["input_image"].CopyFrom(numpy_to_tensor_proto(array, self._base_input_tensor))
+        request.inputs["input_image"].CopyFrom(numpy_to_tensor_proto(array))
 
-        try:
-            stub = await self._get_tf_stub()
-            tf_response = await stub.Predict(request, timeout=30.0)
-        except Exception as exc:
-            logger.error("[%s] Errore TF Serving [%s]: %s", self.name, image_key, exc)
-            raise
+        stub = await self._get_tf_stub()
+        tf_response = await stub.Predict(request, timeout=30.0)
 
-        if "output" in tf_response.outputs:
-            preds = tensor_proto_to_numpy(tf_response.outputs["output"], np.float32)
-        else:
-            first_key = list(tf_response.outputs.keys())[0]
-            preds = tensor_proto_to_numpy(tf_response.outputs[first_key], np.float32)
+        probs = tensor_proto_to_numpy(tf_response.outputs["probabilities"], np.float32)
+        embeddings = tensor_proto_to_numpy(tf_response.outputs["embedding"], np.float32)
 
         outputs = [
-            InferOutput(name="embedding", shape=list(preds.shape), datatype="FP32", data=preds),
-            InferOutput(name="predicted_class", shape=list(preds.shape), datatype="FP32", data=preds)
+            InferOutput(name="predicted_class", shape=list(probs.shape), datatype="FP32", data=probs),
+            InferOutput(name="embedding", shape=list(embeddings.shape), datatype="FP32", data=embeddings)
         ]
         return InferResponse(response_id=image_key, model_name=self.name, infer_outputs=outputs)
 
@@ -199,13 +194,13 @@ class ImageTransformer(Model):
             raise ValueError("Output 'predicted_class' non trovato")
 
         logits_array = predicted.as_numpy()
-        predicted_class = int(np.argmax(logits_array, axis=-1).flatten()[0])
+        predicted_class = int(np.argmax(logits_array, axis=-1)[0])
 
         embedding = response.get_output_by_name("embedding")
-        if embedding is not None: 
+        if embedding is not None and embedding.as_numpy().size > 0:
             asyncio.create_task(self._send_to_kafka(embedding.as_numpy(), image_key))
         else:
-            logger.warning("[%s] Output 'embedding' assente per key: %s", self.name, image_key)
+            logger.error("[%s] [EMBEDDING KO] Output 'embedding' assente o vuoto per key: %s", self.name, image_key)
 
         return InferResponse(
             response_id=image_key,
