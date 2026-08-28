@@ -1,67 +1,64 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
-import { htmlReport } from "https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js";
 import { textSummary } from "https://jslib.k6.io/k6-summary/0.1.0/index.js";
 
 const inferenceDuration = new Trend('inference_processing_time');
 
 export const options = {
   stages: [
-    { duration: '1m', target: 5 },
-    { duration: '2m', target: 15 },
-    { duration: '3m', target: 30 },
-    { duration: '3m', target: 30 },
-    { duration: '1m', target: 0 },
+    { duration: '30s', target: 5 },   // Warm-up 
+    { duration: '5m',  target: 12 },  // stable
+    { duration: '30s', target: 0 },   // Cool-down 
   ],
   thresholds: {
     'http_req_failed': ['rate<0.01'],
-    'inference_processing_time': ['p(95)<4000', 'p(99)<5000'],
+    'inference_processing_time': ['p(95)<3000', 'p(99)<4000'],
   },
-  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
+  summaryTrendStats: ['count', 'avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
 };
 
-const rawImage = open('./immagine.png', 'b');
+const rawImage = open('./immagine_256.png', 'b');
 const imageBytes = new Uint8Array(rawImage);
+
+const header = {
+  inputs: [{
+    name: "input",
+    shape: [imageBytes.byteLength],
+    datatype: "UINT8",
+    parameters: {
+      binary_data_size: imageBytes.byteLength
+    }
+  }]
+};
+
+const headerBytes = new TextEncoder().encode(JSON.stringify(header));
+const headerLen = headerBytes.byteLength;
+
+const payloadBuffer = new Uint8Array(headerLen + imageBytes.byteLength);
+payloadBuffer.set(headerBytes, 0);
+payloadBuffer.set(imageBytes, headerLen);
 
 const INGRESS_HOST = '192.168.17.37';
 const INGRESS_PORT = '31978';
 
 export function testModel(modelName) {
   const url = `http://${INGRESS_HOST}:${INGRESS_PORT}/v2/models/${modelName}/infer`;
-  const hostName = `${modelName}-predictor.default.example.com`;
-
-  const header = {
-    inputs: [{
-      name: "input",
-      shape: [imageBytes.byteLength],
-      datatype: "UINT8",
-      parameters: {
-        binary_data_size: imageBytes.byteLength
-      }
-    }]
-  };
-
-  const headerStr = JSON.stringify(header);
-  const headerBytes = new TextEncoder().encode(headerStr);
-  const headerLen = headerBytes.byteLength;
-
-  const payload = new Uint8Array(headerLen + imageBytes.byteLength);
-  payload.set(headerBytes, 0);
-  payload.set(imageBytes, headerLen);
-
+  
   const params = {
     headers: {
       'Content-Type': 'application/octet-stream',
-      'Host': hostName,
+      'Host': `${modelName}-predictor.default.example.com`,
       'Inference-Header-Content-Length': headerLen.toString(),
-      'X-Image-Key': `k6-test-${Date.now()}`
+      'X-Image-Key': `k6-test-${Date.now()}-${Math.random()}`,
+      'x-filename': 'immagine.png',
+      'content-type': 'image/png'
     },
-    timeout: '15s',
+    timeout: '10s',
   };
 
-  const res = http.post(url, payload.buffer, params);
-  
+  const res = http.post(url, payloadBuffer.buffer, params);
+
   const success = check(res, {
     'status is 200': (r) => r.status === 200,
     'has predicted_class output': (r) => {
@@ -77,8 +74,7 @@ export function testModel(modelName) {
   if (success) {
     inferenceDuration.add(res.timings.duration);
   }
-
-  sleep(0.2);
+  sleep(0.3); //300ms
 }
 
 export default function() {
@@ -88,7 +84,6 @@ export default function() {
 
 export function handleSummary(data) {
   return {
-    "report-simple-cnn-test.html": htmlReport(data),
     stdout: textSummary(data, { indent: " ", enableColors: true }),
   };
 }
