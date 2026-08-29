@@ -18,11 +18,28 @@ simple-cnn-predictor-00001-deployment-75b97546d-8jk9x         3/3     Running   
 simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   0          19h   10.42.3.235  nvidia-ca7
 ```
 -------------------------------------------------------------------------------------------------
-Inference microservice internal latency
+## Inference microservice internal latency
 - pre-processing
 - post-processing
 - prediction
 
+[ PNG PLOT LINK  ](Inference/Transformer/internal_latency.png)
 <p align="center">
-  <img src="Inference/Transformer/internal_latency.png" width="80%" alt="Transformer internal latency" />
+  <img src="Inference/Transformer/internal_latency.png" width="100%" alt="Transformer internal latency" />
+</p>
+
+-------------------------------------------------------------------------------------------------
+
+## Cloud side http latency req metrics
+
+<p align="center">
+  <img src="Inference/Transformer/k6_http_req_duration_local.png" width="70%" alt="cloud side latency" />
+</p>
+
+-------------------------------------------------------------------------------------------------
+
+## Client side http latency req metrics
+
+<p align="center">
+  <img src="Inference/Transformer/k6_http_req_duration_remote.png" width="70%" alt="cloud side latency" />
 </p>
