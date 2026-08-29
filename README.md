@@ -33,7 +33,7 @@ simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   
 ## Cloud side http latency req metrics
 
 <p align="center">
-  <img src="Inference/Transformer/k6_http_req_duration_local.png" width="70%" alt="cloud side latency" />
+  <img src="Inference/Transformer/k6_http_req_duration_local.png" width="100%" alt="cloud side latency" />
 </p>
 
 -------------------------------------------------------------------------------------------------
@@ -41,5 +41,5 @@ simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   
 ## Client side http latency req metrics
 
 <p align="center">
-  <img src="Inference/Transformer/k6_http_req_duration_remote.png" width="70%" alt="cloud side latency" />
+  <img src="Inference/Transformer/k6_http_req_duration_remote.png" width="100%" alt="cloud side latency" />
 </p>
