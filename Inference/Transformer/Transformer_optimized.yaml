@@ -5,11 +5,10 @@ metadata:
   namespace: default
 data:
   batching_params.pbtxt: |
-    max_batch_size { value: 4 }
-    batch_timeout_micros { value: 1000 }
-    max_enqueued_batches { value: 200 }
+    max_batch_size { value: 8 }
+    batch_timeout_micros { value: 10000 } #10ms
+    max_enqueued_batches { value: 300 }
     num_batch_threads { value: 4 }
-
 ---
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
@@ -68,7 +67,7 @@ spec:
             mountPath: /mnt/config
 
       - name: transformer-container
-        image: tomasconti02/rpc_v2:v35
+        image: tomasconti02/rpc_v2_glocery:v91
         command:
           - python
           - -m
@@ -88,9 +87,9 @@ spec:
           - "org.kubeflow.serving.inference.request"
         env:
           - name: WORKERS
-            value: "8"
+            value: "4"
           - name: NUM_WORKERS
-            value: "8"
+            value: "4"
           - name: TRACE
             value: "false"
           - name: UVICORN_ACCESS_LOG
@@ -179,7 +178,7 @@ spec:
             mountPath: /mnt/config
 
       - name: transformer-container
-        image: tomasconti02/rpc_v2:v35
+        image: tomasconti02/rpc_v2_glocery:v91
         command:
           - python
           - -m
@@ -199,9 +198,9 @@ spec:
           - "org.kubeflow.serving.inference.request"
         env:
           - name: WORKERS
-            value: "8"
+            value: "4"
           - name: NUM_WORKERS
-            value: "8"
+            value: "4"
           - name: TRACE
             value: "false"
           - name: UVICORN_ACCESS_LOG
