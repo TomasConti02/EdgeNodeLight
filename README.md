@@ -43,3 +43,11 @@ simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   
 <p align="center">
   <img src="Inference/Transformer/k6_http_req_duration_remote.png" width="100%" alt="cloud side latency" />
 </p>
+
+-------------------------------------------------------------------------------------------------
+
+## Latency comparison
+
+<p align="center">
+  <img src="Inference/Transformer/metrics_comparison.png" width="100%" alt="cloud side latency" />
+</p>
