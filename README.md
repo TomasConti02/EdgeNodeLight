@@ -51,3 +51,27 @@ simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   
 <p align="center">
   <img src="Inference/Transformer/metrics_comparison.png" width="100%" alt="cloud side latency" />
 </p>
+
+---------------------------------------------------------------------------------------------------
+## Consideration 
+
+During the testing phase, the MEC Kubernetes plug-in architecture did not show clear performance improvements when using KServe without the serverless architecture. This is mainly due to the small and limited testing environment, which may not be large enough to show the advantages of the different networking architecture. The following KServe configuration was used:
+
+```yaml
+annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+    sidecar.istio.io/inject: "false"
+```
+Also the isolation of the others service Pods from the nvidia node didn't show performance improvements.
+
+Using FP16 instead of FP32 also did not show significant improvements. This is probably because the models used for testing are small.
+
+Running and testing only one model results in a slightly lower latency than running two models on the same GPU, but the difference is small. This may be due to some contention (locks) when multiple models access to the GPU.
+
+### Possible Performance Improvements:
+
+1. Network bypass: Reduce the network overhead by allowing process to access directly to the network buffers, bypassing part of the operating system and hypervisor network stack. This approach is less secure but can be suitable for a closed architecture. An example is the [INSANE project](https://github.com/MMw-Unibo/INSANE).
+
+2. Pipeline optimization
+
+3. Better runtime: Test a more efficient inference runtime that can make better use of the GPU and reduce the overhead and latency of GPU access.
