@@ -1,5 +1,6 @@
 # EdgeNodeLight
 
+-------------------------------------------------------------------------------------------------
 - [ Keras model packing ](Inference/Model/modelv3.py)
 - [ Transformer python codebased ](Inference/Transformer/Transformer_optimized_glocery.py)
 - [ Transformer yaml deployment ](Inference/Transformer/Transformer_optimized.yaml)
@@ -17,8 +18,27 @@ ood-detector-simple-cnn-test-00001-deployment-8bd77588d-k8b87 3/3     Running   
 simple-cnn-predictor-00001-deployment-75b97546d-8jk9x         3/3     Running   0          19h   10.42.3.234  nvidia-ca7
 simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   0          19h   10.42.3.235  nvidia-ca7
 ```
+
+-------------------------------------------------------------------------------------------------
+
+## Transformer microservice architecture
+
+<p align="center">
+  <img src="Inference/Transformer/transformer.png" width="70%" alt="transformer architecture" />
+</p>
+
+-------------------------------------------------------------------------------------------------
+
+## Detector microservice architecture
+
+<p align="center">
+  <img src="Inference/Transformer/ood.png" width="70%" alt="transformer architecture" />
+</p>
+
+
 -------------------------------------------------------------------------------------------------
 ## Inference microservice internal latency
+
 - pre-processing
 - post-processing
 - prediction
@@ -41,7 +61,7 @@ simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   
 ## Client side http latency req metrics
 
 <p align="center">
-  <img src="Inference/Transformer/k6_http_req_duration_remote.png" width="100%" alt="cloud side latency" />
+  <img src="Inference/Transformer/k6_http_req_duration_remote.png" width="100%" alt="client side latency" />
 </p>
 
 -------------------------------------------------------------------------------------------------
@@ -49,7 +69,7 @@ simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   
 ## Latency comparison
 
 <p align="center">
-  <img src="Inference/Transformer/metrics_comparison.png" width="100%" alt="cloud side latency" />
+  <img src="Inference/Transformer/metrics_comparison.png" width="100%" alt="latency comparison" />
 </p>
 
 ---------------------------------------------------------------------------------------------------
