@@ -1,4 +1,4 @@
-     execution: local
+    execution: local
         script: glocery_hard.js
         output: -
 
@@ -8,27 +8,25 @@
      ✓ status is 200
      ✓ has predicted_class output
 
-     checks.........................: 100.00% ✓ 12870     ✗ 0   
-     data_received..................: 2.4 MB  6.7 kB/s
-     data_sent......................: 397 MB  1.1 MB/s
-     http_req_blocked...............: count=6435 avg=57.24µs    min=2.49µs   med=9.48µs     max=66.19ms     p(90)=12.13µs    p(95)=13.83µs    p(99)=28.19µs   
-     http_req_connecting............: count=6435 avg=46.87µs    min=0s       med=0s         max=66.07ms     p(90)=0s         p(95)=0s         p(99)=0s        
-     http_req_duration..............: count=6435 avg=114.23ms   min=57.93ms  med=101.73ms   max=1.28s       p(90)=143.19ms   p(95)=161.19ms   p(99)=313.08ms  
-       { expected_response:true }...: count=6435 avg=114.23ms   min=57.93ms  med=101.73ms   max=1.28s       p(90)=143.19ms   p(95)=161.19ms   p(99)=313.08ms  
-   ✓ http_req_failed................: 0.00%   ✓ 0         ✗ 6435
-     http_req_receiving.............: count=6435 avg=109.16µs   min=23.42µs  med=106.62µs   max=833.8µs     p(90)=135.71µs   p(95)=147.24µs   p(99)=211.75µs  
-     http_req_sending...............: count=6435 avg=231.11µs   min=57.61µs  med=222.54µs   max=1.73ms      p(90)=282.16µs   p(95)=319.18µs   p(99)=525.01µs  
-     http_req_tls_handshaking.......: count=6435 avg=0s         min=0s       med=0s         max=0s          p(90)=0s         p(95)=0s         p(99)=0s        
-     http_req_waiting...............: count=6435 avg=113.89ms   min=57.49ms  med=101.38ms   max=1.28s       p(90)=142.89ms   p(95)=160.88ms   p(99)=312.77ms  
-     http_reqs......................: 6435    17.857659/s
-   ✓ inference_processing_time......: count=6435 avg=114.236056 min=57.93185 med=101.736834 max=1284.889819 p(90)=143.192781 p(95)=161.195316 p(99)=313.081637
-     iteration_duration.............: count=6435 avg=415.36ms   min=359.03ms med=402.8ms    max=1.58s       p(90)=444.42ms   p(95)=462.41ms   p(99)=614.52ms  
-     iterations.....................: 6435    17.857659/s
+     checks.........................: 100.00% ✓ 13234     ✗ 0   
+     data_received..................: 2.5 MB  6.8 kB/s
+     data_sent......................: 408 MB  1.1 MB/s
+     http_req_blocked...............: count=6617 avg=50.87µs    min=2.05µs    med=9.41µs   max=37.03ms     p(90)=11.77µs    p(95)=13.03µs    p(99)=27.68µs   
+     http_req_connecting............: count=6617 avg=40.5µs     min=0s        med=0s       max=36.95ms     p(90)=0s         p(95)=0s         p(99)=0s        
+     http_req_duration..............: count=6617 avg=102.6ms    min=67.08ms   med=92.7ms   max=1.11s       p(90)=130.21ms   p(95)=139.6ms    p(99)=162.21ms  
+       { expected_response:true }...: count=6617 avg=102.6ms    min=67.08ms   med=92.7ms   max=1.11s       p(90)=130.21ms   p(95)=139.6ms    p(99)=162.21ms  
+   ✓ http_req_failed................: 0.00%   ✓ 0         ✗ 6617
+     http_req_receiving.............: count=6617 avg=107.03µs   min=24.13µs   med=105.85µs max=487.9µs     p(90)=133.2µs    p(95)=143.62µs   p(99)=189.48µs  
+     http_req_sending...............: count=6617 avg=232.06µs   min=47.42µs   med=222.6µs  max=2.38ms      p(90)=288.31µs   p(95)=326.37µs   p(99)=544.8µs   
+     http_req_tls_handshaking.......: count=6617 avg=0s         min=0s        med=0s       max=0s          p(90)=0s         p(95)=0s         p(99)=0s        
+     http_req_waiting...............: count=6617 avg=102.26ms   min=66.65ms   med=92.36ms  max=1.11s       p(90)=129.88ms   p(95)=139.27ms   p(99)=161.86ms  
+     http_reqs......................: 6617    18.368233/s
+   ✓ inference_processing_time......: count=6617 avg=102.602187 min=67.083304 med=92.70284 max=1114.374463 p(90)=130.211954 p(95)=139.601523 p(99)=162.217998
+     iteration_duration.............: count=6617 avg=403.71ms   min=368.73ms  med=393.75ms max=1.41s       p(90)=431.35ms   p(95)=440.76ms   p(99)=463.57ms  
+     iterations.....................: 6617    18.368233/s
      vus............................: 1       min=1       max=12
 
-running (6m00.3s), 00/12 VUs, 6435 complete and 0 interrupted iterations
-
-
+running (6m00.2s), 00/12 VUs, 6617 complete and 0 interrupted iterations
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
      execution: local
