@@ -27,7 +27,7 @@ IMAGE_WIDTH = 256
 IMAGE_CHANNELS = 3
 
 CLIENT_TIMEOUT = aiohttp.ClientTimeout(total=10)
-GRPC_OPTIONS = [("grpc.max_receive_message_length", 100 * 1024 * 1024), ("grpc.max_send_message_length", 100 * 1024 * 1024)] #increase 
+GRPC_OPTIONS = [("grpc.max_receive_message_length", 100 * 1024 * 1024), ("grpc.max_send_message_length", 100 * 1024 * 1024)] 
 
 def numpy_to_tensor_proto(array: np.ndarray, dtype: types_pb2.DataType) -> tensor_pb2.TensorProto:
     tensor = tensor_pb2.TensorProto()
@@ -38,13 +38,14 @@ def numpy_to_tensor_proto(array: np.ndarray, dtype: types_pb2.DataType) -> tenso
 
 def tensor_proto_to_numpy(tensor: tensor_pb2.TensorProto, target_dtype: np.dtype) -> np.ndarray:
     shape = [int(dim.size) for dim in tensor.tensor_shape.dim]
-    # no byte into format content 
     if len(tensor.float_val) > 0:
         return np.asarray(tensor.float_val, dtype=target_dtype).reshape(shape)
     elif len(tensor.int_val) > 0:
         return np.asarray(tensor.int_val, dtype=target_dtype).reshape(shape)
+    elif len(tensor.tensor_content) > 0:
+        return np.frombuffer(tensor.tensor_content, dtype=target_dtype).reshape(shape)
         
-    raise ValueError(f"Tensor fields float_val and int_val are both empty for shape: {shape}")
+    raise ValueError(f"Tensor fields content are empty for shape: {shape}")
 
 class ImageTransformer(Model):
     def __init__(self, name: str, predictor_host: str, broker: str, broker_host: str, ce_type: str, istio_gateway: str):
@@ -112,31 +113,35 @@ class ImageTransformer(Model):
         filename = headers.get("x-filename", "unknown.png")
         image_type = headers.get("x-custom-param", "image/png") 
 
-        input_tensor = payload.get_input_by_name("input") #collect raw png byte 
+        input_tensor = payload.get_input_by_name("input") 
         if input_tensor is None:
             logger.error("[%s] NO Input V2", self.name)
             raise ValueError("Empty Input V2")
  
-        raw_arr = input_tensor.as_numpy() # to numpy
-        nparr = np.asarray(raw_arr, dtype=np.uint8).ravel() #as unit8 and 1D array 
+        raw_arr = input_tensor.as_numpy() 
+        nparr = np.asarray(raw_arr, dtype=np.uint8).ravel() 
         
-        asyncio.create_task(self._store_image(nparr.tobytes(), filename, image_type, image_key)) #fire and forgot
+        asyncio.create_task(self._store_image(nparr.tobytes(), filename, image_type, image_key))
 
-        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR) #decode as opencv image matrix
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR) 
         if image is None:
             logger.error("[%s] ERROR image decode, image key: %s", self.name, image_key)
             raise ValueError("ERROR image decode")
 
-        cv2.cvtColor(image, cv2.COLOR_BGR2RGB, dst=image) # image matrix to rgb
+        cv2.cvtColor(image, cv2.COLOR_BGR2RGB, dst=image)
 
         if image.shape[0] != IMAGE_HEIGHT or image.shape[1] != IMAGE_WIDTH:
-            image = cv2.resize(image, (IMAGE_WIDTH, IMAGE_HEIGHT), interpolation=cv2.INTER_LINEAR) # resize in case
+            image = cv2.resize(image, (IMAGE_WIDTH, IMAGE_HEIGHT), interpolation=cv2.INTER_LINEAR)
 
-        tensor_data = np.expand_dims(image.astype(np.float32, copy=False), axis=0) #create the input tensor with also the batch dim (1, 256, 256, 3)
-        return InferRequest(model_name=self.name, request_id=image_key, infer_inputs=[InferInput(name="input", shape=list(tensor_data.shape), datatype="FP32", data=tensor_data)])
+        tensor_data = np.expand_dims(image.astype(np.uint8, copy=False), axis=0) #send uint8, float32 is manage into the model internal pipeline
+        return InferRequest(
+            model_name=self.name, 
+            request_id=image_key, 
+            infer_inputs=[InferInput(name="input", shape=list(tensor_data.shape), datatype="UINT8", data=tensor_data)]
+        )
 
     async def predict(self, payload: InferRequest, headers=None, response_headers=None) -> InferResponse:
-        image_key = getattr(payload, "id", "N/A") # remap with id by the framework
+        image_key = getattr(payload, "id", "N/A") 
         input_tensor = payload.get_input_by_name("input")
         
         array = input_tensor.as_numpy()
@@ -145,11 +150,11 @@ class ImageTransformer(Model):
         request.model_spec.name = self.name
         request.model_spec.signature_name = "serving_default"
         
-        request.inputs["input_image"].CopyFrom(numpy_to_tensor_proto(array, types_pb2.DT_FLOAT))
+        request.inputs["input_image"].CopyFrom(numpy_to_tensor_proto(array, types_pb2.DT_UINT8)) #send unit8 to gRPC 
 
         try:
             stub = await self._get_tf_stub()
-            tf_response = await stub.Predict(request, timeout=30.0) #asynch
+            tf_response = await stub.Predict(request, timeout=30.0) 
         except Exception as exc:
             logger.error("[%s] TF Serving Error [%s]: %s", self.name, image_key, exc)
             raise
@@ -157,7 +162,10 @@ class ImageTransformer(Model):
         pred_class = tensor_proto_to_numpy(tf_response.outputs["predicted_class"], np.int32)
         embeddings = tensor_proto_to_numpy(tf_response.outputs["embedding"], np.float32)
 
-        outputs = [ InferOutput(name="predicted_class", shape=list(pred_class.shape), datatype="INT32", data=pred_class), InferOutput(name="embedding", shape=list(embeddings.shape), datatype="FP32", data=embeddings) ]
+        outputs = [ 
+            InferOutput(name="predicted_class", shape=list(pred_class.shape), datatype="INT32", data=pred_class), 
+            InferOutput(name="embedding", shape=list(embeddings.shape), datatype="FP32", data=embeddings) 
+        ]
         return InferResponse(response_id=image_key, model_name=self.name, infer_outputs=outputs)
 
     async def postprocess(self, response: InferResponse, headers=None) -> InferResponse:
@@ -171,7 +179,7 @@ class ImageTransformer(Model):
         predicted_class = int(pred_array.flatten()[0])
 
         embedding = response.get_output_by_name("embedding")
-        asyncio.create_task(self._send_to_kafka(embedding.as_numpy(), image_key)) #fire and forgot
+        asyncio.create_task(self._send_to_kafka(embedding.as_numpy(), image_key))
         
         return InferResponse(response_id=image_key, model_name=self.name, infer_outputs=[InferOutput(name="predicted_class", shape=[1], datatype="INT32", data=[predicted_class])])
 
