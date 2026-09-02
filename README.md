@@ -11,12 +11,44 @@
 - [ OOD detector python codebased ](Drift/driftv6.py)
 - [ OOD detector yaml deployment ](Drift/simple_model_OOD.yaml)
 -------------------------------------------------------------------------------------------------
+
+Cluster configuration:
+
 ```bash
+
+kubectl get pods
 NAME                                                          READY   STATUS    RESTARTS   AGE   IP           NODE
 ood-detector-simple-cnn-00001-deployment-7bf945ff96-bxzlk     3/3     Running   0          15s   10.42.1.217  tconti-mscthesis-a.mmwunibo.it
 ood-detector-simple-cnn-test-00001-deployment-8bd77588d-k8b87 3/3     Running   0          15s   10.42.1.218  tconti-mscthesis-a.mmwunibo.it
 simple-cnn-predictor-00001-deployment-75b97546d-8jk9x         3/3     Running   0          19h   10.42.3.234  nvidia-ca7
 simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   0          19h   10.42.3.235  nvidia-ca7
+
+```
+
+OOD detector redis logging results after a high-throughput inference test phase:
+
+- metrics:redis_success_ops: Tracks the total number of image assets successfully ingested and stored in Redis with an active time-to-live.
+- metrics:redis_success_ttl: Counts the number of times image expiration windows were successfully extended upon confirming that an incoming vector was a ood.
+- metrics:ood_forwarded_total: Measures the total number of odd data points successfully packaged, transmitted and acknowledged by the downstream data lake forwarding endpoint.
+- metrics:ood_dropped_missing_image: Records the number of drifted samples that could not be persisted because the associated image data failed to appear in Redis within the retry window (redirected to a Dead Letter Queue).
+- metrics:redis_errors: Captures any communication or operational failures encountered while interacting with the Redis backend during runtime.
+
+The system has been configured with out a data lake connection for the ood sample, so there is a fallback ack policy that simulate the cloud storage operation.
+
+```bash
+
+kubectl exec ood-detector-simple-cnn-test-00001-deployment-5b58d58789-jrq79 -c redis -- redis-cli mget metrics:redis_success_ops metrics:redis_success_ttl metrics:ood_forwarded_total metrics:ood_dropped_missing_image metrics:redis_errors
+3453
+3453
+3591
+
+kubectl exec ood-detector-simple-cnn-00001-deployment-6645f444b5-hf7p6 -c redis -- redis-cli mget metrics:redis_success_ops metrics:redis_success_ttl metrics:ood_forwarded_total metrics:ood_dropped_missing_image metrics:redis_errors
+3467
+3467
+3825
+
+
+
 ```
 
 -------------------------------------------------------------------------------------------------
@@ -43,13 +75,14 @@ simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   
 - post-processing
 - prediction
 
-[ PNG PLOT LINK  ](Inference/Transformer/internal_latency.png)
+[ PNG PLOT LINK  ](Inference/Transformer/internal_latency3.png)
 <p align="center">
-  <img src="Inference/Transformer/internal_latency.png" width="100%" alt="Transformer internal latency" />
+  <img src="Inference/Transformer/internal_latency2.png" width="100%" alt="Transformer internal latency" />
 </p>
 
 -------------------------------------------------------------------------------------------------
 
+<!-- 
 ## Cloud side http latency req metrics
 
 <p align="center">
@@ -65,7 +98,7 @@ simple-cnn-test-predictor-00001-deployment-5b9b4fdb5-4c69r    3/3     Running   
 </p>
 
 -------------------------------------------------------------------------------------------------
-
+-->
 ## Latency comparison
 
 <p align="center">
