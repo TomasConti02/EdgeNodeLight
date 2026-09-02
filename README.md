@@ -75,7 +75,7 @@ kubectl exec ood-detector-simple-cnn-00001-deployment-6645f444b5-hf7p6 -c redis 
 - post-processing
 - prediction
 
-[ PNG PLOT LINK  ](Inference/Transformer/internal_latency3.png)
+[ PNG PLOT LINK  ](Inference/Transformer/internal_latency2.png)
 <p align="center">
   <img src="Inference/Transformer/internal_latency2.png" width="100%" alt="Transformer internal latency" />
 </p>
