@@ -211,21 +211,21 @@ async def restore_state():
     detector = init_detector()
 
 
-async def forward_ood_batch(): #execute the flush operation only if the data lake send and the ood received the ACK
+async def forward_ood_batch(): #execute the flush operation to the data storage, if it is not configured fallback with a ack simulation
     if not redis_client:
         return
     try:
-        queue_len = await redis_client.llen("queue:ood_to_flush")
+        queue_len = await redis_client.llen("queue:ood_to_flush") #len key queue 
     except Exception as e:
         log.error(f"[Forwarder] Failed to get queue length: {e}")
         return
     if queue_len == 0:
         return
     
-    batch_size = min(queue_len, OOD_FORWARD_BATCH_SIZE)
+    batch_size = min(queue_len, OOD_FORWARD_BATCH_SIZE) #define the size 
     
     try:
-        raw_items = await redis_client.lrange("queue:ood_to_flush", 0, batch_size - 1)
+        raw_items = await redis_client.lrange("queue:ood_to_flush", 0, batch_size - 1)#collect the min or batch size of the queue keys
     except Exception as e:
         log.error(f"[Forwarder] Redis error during range: {e}")
         return
@@ -236,22 +236,18 @@ async def forward_ood_batch(): #execute the flush operation only if the data lak
     batch_payloads = []
     redis_keys_to_delete = [] 
 
-    for raw in raw_items:
+    for raw in raw_items: #collect from redis all the images and metadata related to the queue keys
         try:
-            item = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
+            item = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw) #json decode of the queue item
             img_redis_key = item.get("img_redis_key")
             meta_redis_key = item.get("meta_redis_key")
 
-            img_bytes = await redis_client.get(img_redis_key) if img_redis_key else None
-            meta_dict = await redis_client.hgetall(meta_redis_key) if meta_redis_key else {}
-            decoded_meta = {k.decode('utf-8') if isinstance(k, bytes) else k: v.decode('utf-8') if isinstance(v, bytes) else v for k, v in meta_dict.items()}
-
-            batch_payloads.append({
-                "image_key": img_redis_key,
-                "metadata": decoded_meta,
-                "image_base64": base64.b64encode(img_bytes).decode('utf-8') if img_bytes else None
-            })
-
+            img_bytes = await redis_client.get(img_redis_key) if img_redis_key else None #load the image byte related to the key 
+            meta_dict = await redis_client.hgetall(meta_redis_key) if meta_redis_key else {} #load the image metadata related to the key 
+            decoded_meta = {k.decode('utf-8') if isinstance(k, bytes) else k: v.decode('utf-8') if isinstance(v, bytes) else v for k, v in meta_dict.items()} #metadata in json
+            #create a batch payload when append the loaded data. the image is in base64 but can be change based on the receiver protocol
+            batch_payloads.append({ "image_key": img_redis_key, "metadata": decoded_meta,"image_base64": base64.b64encode(img_bytes).decode('utf-8') if img_bytes else None})
+            #collect the keys for the redis flush only after received the storage ack
             if img_redis_key:
                 redis_keys_to_delete.append(img_redis_key)
             if meta_redis_key:
@@ -261,7 +257,7 @@ async def forward_ood_batch(): #execute the flush operation only if the data lak
 
     forward_success = True
     if OOD_FORWARD_ENDPOINT and batch_payloads: #send data to the data lake service
-        try:
+        try: #MOCK flush HTTP POST request to the storage service with all the information into json format into the paylaod
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(OOD_FORWARD_ENDPOINT, json={"batch": batch_payloads})
                 if response.status_code not in (200, 201, 202, 204):
@@ -269,18 +265,18 @@ async def forward_ood_batch(): #execute the flush operation only if the data lak
                     forward_success = False
         except Exception as net_err:
             log.error(f"[Forwarder] Failed to connect to data lake endpoint {OOD_FORWARD_ENDPOINT}: {net_err}")
-            forward_success = False
+            forward_success = False #ack non receiver, no flush!!!!!!!!!!!!!!
     else: #fall back
         # Data lake not configured yet: simulate successful ack/flush so items leave the queue cleanly
         log.debug(f"[Forwarder] Data lake endpoint not set. Simulating successful forward and ACK for {len(batch_payloads)} items.")
 
-    if forward_success:
+    if forward_success: # if the flush request received the ack for the db operate the redis data delation
         try:
-            async with redis_client.pipeline(transaction=True) as pipe:
-                pipe.ltrim("queue:ood_to_flush", batch_size, -1)
-                for k in redis_keys_to_delete:
+            async with redis_client.pipeline(transaction=True) as pipe: #redis delation transaction of the keys
+                pipe.ltrim("queue:ood_to_flush", batch_size, -1) #cut the key queue
+                for k in redis_keys_to_delete: #for each metadata and redis object key delate the item for the storage
                     pipe.delete(k)
-                pipe.incrby("metrics:ood_forwarded_total", len(batch_payloads))
+                pipe.incrby("metrics:ood_forwarded_total", len(batch_payloads)) # update the metrics increment the number of forworded and delated 
                 await pipe.execute()
             log.info(f"[Forwarder] Successfully processed and cleaned up {len(batch_payloads)} OOD items.")
         except Exception as del_err:
@@ -289,13 +285,13 @@ async def forward_ood_batch(): #execute the flush operation only if the data lak
         log.warning(f"[Forwarder] Forwarding failed or unacknowledged. Items remain in queue for retry.")
 
 
-async def wait_for_redis_image(img_key: str, meta_key: str, retries: int = RETRY):
-    for attempt in range(retries):
+async def wait_for_redis_image(img_key: str, meta_key: str, retries: int = RETRY): # retry RETRY-times with interval of RETRY_DELAY for the image
+    for attempt in range(retries): # look up retry
         img = await redis_client.get(img_key)
         meta = await redis_client.hgetall(meta_key)
         if img is not None and meta:
             return img, meta
-        await asyncio.sleep(RETRY_DELAY)
+        await asyncio.sleep(RETRY_DELAY) #delay 
     return None, None
 
 
@@ -303,20 +299,20 @@ async def worker_loop(worker_id: int):
     log.info(f"[Worker-{worker_id}] Background processing loop started.")
     try:
         while True:
-            item = await queue.get()
+            item = await queue.get() # loop started at the bootstrap of the service with a no blocking waiting for the embedding event called by the receiver
             eid = item.get("event_id", "unknown")
             image_key = item.get("image_key", "unknown-key")
             inst = item.get("embedding") 
             
             try:
                 if inst is not None:
-                    dist, ood, th = await asyncio.to_thread(detector.process, inst)
+                    dist, ood, th = await asyncio.to_thread(detector.process, inst) #asynch ood detection very fast by design 
 
                     if image_key != "unknown-key" and redis_client is not None:
                         img_redis_key = f"image:{image_key}"
                         meta_redis_key = f"{img_redis_key}:meta"
 
-                        if ood:
+                        if ood: # the sample is a ood
                             log.warning(f"[OOD Detector] OOD DETECTED! Key: {image_key}")
                             img_bytes, meta_dict = await wait_for_redis_image(img_redis_key, meta_redis_key) #get the redis key into a high concorrent thread service
                             
@@ -324,24 +320,24 @@ async def worker_loop(worker_id: int):
                                 log.warning(f"[Worker-{worker_id}] Image not yet ready in Redis for OOD key {image_key}. Recorded to DLQ and incremented dropped counter.")
                                 dlq_record = json.dumps({"event_id": eid, "image_key": image_key, "img_redis_key": img_redis_key, "meta_redis_key": meta_redis_key, "timestamp": datetime.datetime.now(timezone.utc).isoformat()})#event log creation
                                 async with redis_client.pipeline(transaction=True) as pipe: # redis transaction to add the dlq_record into the ood_dlq queue and add counter
-                                    pipe.incr("metrics:ood_dropped_missing_image")
-                                    pipe.rpush("queue:ood_dlq", dlq_record)
+                                    pipe.incr("metrics:ood_dropped_missing_image") # increment the metric
+                                    pipe.rpush("queue:ood_dlq", dlq_record) # add the items into dlq key !! 
                                     await pipe.execute()
-                                continue
-
+                                continue # continue with the while
+                            #now the system have find out the information key link into the redis ans 
                             ood_record = json.dumps({ "img_redis_key": img_redis_key, "meta_redis_key": meta_redis_key })
 
-                            async with redis_client.pipeline(transaction=True) as pipe:
+                            async with redis_client.pipeline(transaction=True) as pipe: # first TTL extension 
                                 pipe.expire(img_redis_key, REDIS_OOD_EXTENDED_TTL)
                                 pipe.expire(meta_redis_key, REDIS_OOD_EXTENDED_TTL)
-                                pipe.rpush("queue:ood_to_flush", ood_record)
-                                pipe.incr("metrics:redis_success_ttl")
+                                pipe.rpush("queue:ood_to_flush", ood_record) # push into adedicated queue of metadata and image key the sample
+                                pipe.incr("metrics:redis_success_ttl") # increment metrics
                                 await pipe.execute()
 
                             queue_len = await redis_client.llen("queue:ood_to_flush")
                             if queue_len >= OOD_FORWARD_BATCH_SIZE:
-                                await forward_ood_batch()
-                        else:
+                                await forward_ood_batch() #operate the flush if request
+                        else: #sample is a id, delate all the informations from the local redis storage 
                             try:
                                 async with redis_client.pipeline(transaction=True) as pipe:
                                     pipe.delete(img_redis_key)
@@ -406,6 +402,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# store image and receive arrived into the service in asynch-way there is no order!
 
 @app.post("/")
 async def receive(req: Request):
@@ -422,7 +419,7 @@ async def receive(req: Request):
     if emb is None:
         raise HTTPException(400, "Missing 'embedding'")
     try:
-        queue.put_nowait({"event_id": eid, "image_key": image_key, "embedding": emb})
+        queue.put_nowait({"event_id": eid, "image_key": image_key, "embedding": emb}) #add the event log into the internal asynch queue, no blocking
     except asyncio.QueueFull:
         raise HTTPException(503, "Overloaded")
 
@@ -491,10 +488,9 @@ async def store_image(request: Request, content_type: Optional[str] = Header(Non
     meta_key = f"{key}:meta"
     ttl = x_ttl or REDIS_IMAGE_TTL
     
-    meta = { "filename": x_filename or "unknown", "content_type": content_type or "unknown",
-             "timestamp": datetime.datetime.now(timezone.utc).isoformat(), "ttl": str(ttl), "metadata": x_metadata or "", "resolved_key": key, }
+    meta = { "filename": x_filename or "unknown", "content_type": content_type or "unknown", "timestamp": datetime.datetime.now(timezone.utc).isoformat(), "ttl": str(ttl), "metadata": x_metadata or "", "resolved_key": key, }
     try:
-        async with redis_client.pipeline(transaction=True) as pipe:
+        async with redis_client.pipeline(transaction=True) as pipe: # image and metadata redis transaction, 
             pipe.setex(key, ttl, img_bytes)
             pipe.hset(meta_key, mapping=meta)
             pipe.expire(meta_key, ttl)
