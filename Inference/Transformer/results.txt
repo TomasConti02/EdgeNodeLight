@@ -1,3 +1,66 @@
+
+70%
+     execution: local
+        script: glocery_hard.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 12 max VUs, 6m30s max duration (incl. graceful stop):
+              * default: Up to 12 looping VUs for 6m0s over 3 stages (gracefulRampDown: 30s, gracefulStop: 30s)
+
+     ✓ status is 200
+     ✓ has predicted_class output
+
+     checks.........................: 100.00% ✓ 14164     ✗ 0   
+     data_received..................: 2.6 MB  7.3 kB/s
+     data_sent......................: 177 MB  491 kB/s
+     http_req_blocked...............: count=7082 avg=44.73µs   min=2.99µs    med=9.52µs    max=23.85ms   p(90)=14.08µs    p(95)=20.23µs    p(99)=79.08µs  
+     http_req_connecting............: count=7082 avg=32.9µs    min=0s        med=0s        max=23.75ms   p(90)=0s         p(95)=0s         p(99)=0s       
+     http_req_duration..............: count=7082 avg=76.11ms   min=53.46ms   med=69.31ms   max=322.94ms  p(90)=107.32ms   p(95)=110.73ms   p(99)=122.54ms 
+       { expected_response:true }...: count=7082 avg=76.11ms   min=53.46ms   med=69.31ms   max=322.94ms  p(90)=107.32ms   p(95)=110.73ms   p(99)=122.54ms 
+   ✓ http_req_failed................: 0.00%   ✓ 0         ✗ 7082
+     http_req_receiving.............: count=7082 avg=124.16µs  min=21.4µs    med=112.87µs  max=828.59µs  p(90)=187.38µs   p(95)=213.85µs   p(99)=323.46µs 
+     http_req_sending...............: count=7082 avg=203.77µs  min=53.01µs   med=187.63µs  max=2.06ms    p(90)=285.74µs   p(95)=332.99µs   p(99)=510.82µs 
+     http_req_tls_handshaking.......: count=7082 avg=0s        min=0s        med=0s        max=0s        p(90)=0s         p(95)=0s         p(99)=0s       
+     http_req_waiting...............: count=7082 avg=75.78ms   min=53.09ms   med=68.99ms   max=322.67ms  p(90)=107.02ms   p(95)=110.4ms    p(99)=122.24ms 
+     http_reqs......................: 7082    19.655477/s
+   ✓ inference_processing_time......: count=7082 avg=76.114711 min=53.465644 med=69.318066 max=322.94076 p(90)=107.328482 p(95)=110.736765 p(99)=122.54686
+     iteration_duration.............: count=7082 avg=377.28ms  min=354.07ms  med=370.48ms  max=623.97ms  p(90)=408.44ms   p(95)=411.88ms   p(99)=423.69ms 
+     iterations.....................: 7082    19.655477/s
+     vus............................: 1       min=1       max=12
+
+running (6m00.3s), 00/12 VUs, 7082 complete and 0 interrupted iterations
+ 
+     execution: local
+        script: glocery_hard.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 12 max VUs, 6m30s max duration (incl. graceful stop):
+              * default: Up to 12 looping VUs for 6m0s over 3 stages (gracefulRampDown: 30s, gracefulStop: 30s)
+
+     ✓ status is 200
+     ✓ has predicted_class output
+
+     checks.........................: 100.00% ✓ 14176     ✗ 0   
+     data_received..................: 2.6 MB  7.3 kB/s
+     data_sent......................: 177 MB  491 kB/s
+     http_req_blocked...............: count=7088 avg=43.49µs   min=1.89µs    med=9.37µs    max=21.52ms    p(90)=13.29µs    p(95)=17.37µs    p(99)=67.92µs   
+     http_req_connecting............: count=7088 avg=32.3µs    min=0s        med=0s        max=21.4ms     p(90)=0s         p(95)=0s         p(99)=0s        
+     http_req_duration..............: count=7088 avg=75.74ms   min=53.53ms   med=70.15ms   max=336.04ms   p(90)=103.58ms   p(95)=109.4ms    p(99)=134.4ms   
+       { expected_response:true }...: count=7088 avg=75.74ms   min=53.53ms   med=70.15ms   max=336.04ms   p(90)=103.58ms   p(95)=109.4ms    p(99)=134.4ms   
+   ✓ http_req_failed................: 0.00%   ✓ 0         ✗ 7088
+     http_req_receiving.............: count=7088 avg=121.14µs  min=18.54µs   med=111.14µs  max=999.32µs   p(90)=183.5µs    p(95)=205.11µs   p(99)=299.07µs  
+     http_req_sending...............: count=7088 avg=195.85µs  min=46.2µs    med=180.38µs  max=2.63ms     p(90)=271.65µs   p(95)=315.26µs   p(99)=527.91µs  
+     http_req_tls_handshaking.......: count=7088 avg=0s        min=0s        med=0s        max=0s         p(90)=0s         p(95)=0s         p(99)=0s        
+     http_req_waiting...............: count=7088 avg=75.43ms   min=53.25ms   med=69.83ms   max=335.65ms   p(90)=103.3ms    p(95)=109.06ms   p(99)=134.2ms   
+     http_reqs......................: 7088    19.670653/s
+   ✓ inference_processing_time......: count=7088 avg=75.749696 min=53.532941 med=70.154687 max=336.040259 p(90)=103.586263 p(95)=109.406378 p(99)=134.407269
+     iteration_duration.............: count=7088 avg=376.9ms   min=354.18ms  med=371.33ms  max=636.9ms    p(90)=404.7ms    p(95)=410.51ms   p(99)=435.44ms  
+     iterations.....................: 7088    19.670653/s
+     vus............................: 1       min=1       max=12
+
+running (6m00.3s), 00/12 VUs, 7088 complete and 0 interrupted iterations
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
      execution: local
         script: glocery_hard.js
         output: -
